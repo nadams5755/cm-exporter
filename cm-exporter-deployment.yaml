@@ -1,0 +1,102 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: cm-exporter-config-nfs
+spec:
+  capacity:
+    storage: 200Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: kmaster.k8s.lan
+    path: "/export/d01/cm-exporter-config"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cm-exporter-config-nfs
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 200Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cm-exporter-deployment
+  labels:
+    app: cm-exporter
+    ver: "1.0.1"
+spec:
+  template:
+    metadata:
+      name: cm-exporter-pod
+      labels:
+        app: cm-exporter
+    spec:
+      securityContext:
+      nodeSelector:
+       fastnet: "true"
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "0"
+      initContainers:
+      - name: init-restore-config
+        image: golang:1.17
+        imagePullPolicy: Always
+        volumeMounts:
+          - mountPath: /config
+            name: cm-exporter-config
+          - mountPath: /configbackup
+            name: cm-exporter-config-nfs
+        command: ["/bin/sh", "-c"]  
+        args: ["cp /configbackup/build.sh /config/ && /config/build.sh"]
+      containers:
+      - name: cm-exporter
+        image: golang:1.17
+        imagePullPolicy: Always
+        volumeMounts:
+          - mountPath: /config
+            name: cm-exporter-config
+        command: ["/bin/sh", "-c"]  
+        args: ["/config/cable_modem_exporter"]
+      volumes:
+        - name: cm-exporter-config
+          emptyDir: {}
+        - name: cm-exporter-config-nfs
+          persistentVolumeClaim:
+            claimName: cm-exporter-config-nfs
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: "app"
+                operator: In
+                values:
+                - cm-exporter
+            topologyKey: "kubernetes.io/hostname"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cm-exporter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cm-exporter-service
+spec:
+  type: NodePort
+#  type: ClusterIP
+  ports:
+  - targetPort: 8081
+    port: 8081
+#    nodePort: 30571
+    name: ui
+  selector:
+      app: cm-exporter
