@@ -47,24 +47,24 @@ spec:
           value: "0"
       initContainers:
       - name: init-restore-config
-        image: golang:1.17
+        image: golang:1.20
         imagePullPolicy: Always
         volumeMounts:
           - mountPath: /config
             name: cm-exporter-config
           - mountPath: /configbackup
             name: cm-exporter-config-nfs
-        command: ["/bin/sh", "-c"]  
+        command: ["/bin/sh", "-c"]
         args: ["cp /configbackup/build.sh /config/ && /config/build.sh"]
       containers:
       - name: cm-exporter
-        image: golang:1.17
+        image: golang:1.20
         imagePullPolicy: Always
         volumeMounts:
           - mountPath: /config
             name: cm-exporter-config
-        command: ["/bin/sh", "-c"]  
-        args: ["/config/cable_modem_exporter"]
+        command: ["/bin/sh", "-c"]
+        args: ["/config/cable_modem_exporter -listenHost=0.0.0.0 -listenPort=8081"]
       volumes:
         - name: cm-exporter-config
           emptyDir: {}
@@ -92,11 +92,9 @@ metadata:
   name: cm-exporter-service
 spec:
   type: NodePort
-#  type: ClusterIP
   ports:
   - targetPort: 8081
     port: 8081
-#    nodePort: 30571
     name: ui
   selector:
       app: cm-exporter
